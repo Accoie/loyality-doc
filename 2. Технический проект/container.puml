@@ -1,0 +1,47 @@
+@startuml
+title Контейнерная диаграмма системы управления лояльностью
+
+' C4 Container diagram and simple technology icons
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+!define DEVICONS1 https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
+!define DEVICONS2 https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons2
+!include DEVICONS1/redis.puml
+!include DEVICONS2/csharp.puml
+!include DEVICONS2/postgresql.puml
+
+LAYOUT_LEFT_RIGHT()
+SHOW_LEGEND()
+
+Person(client, "Клиент", "Работает с балансом, историей и акциями")
+Person(marketing, "Менеджер по маркетингу", "Управляет акциями, сегментами и отчётами")
+Person(admin, "Администратор", "Управляет ролями, блокировками и настройками")
+
+System_Ext(pos, "POS", "Покупки, возвраты и статус оплаты")
+System_Ext(crm, "CRM", "Данные о клиентах и активности")
+System_Ext(message_provider, "Провайдер сообщений", "Доставка уведомлений")
+
+System_Boundary(loyalty, "Система управления лояльностью") {
+    Container(web, "Веб-приложение", "React + TypeScript", "Адаптивный личный кабинет и интерфейсы сотрудников")
+    Container(main, "Основной сервис", "C# или Go", "Пользователи, роли, бонусы, акции и отчёты", $sprite="csharp")
+    Container(integration, "Интеграционный сервис", "C# или Go", "Принимает покупки и возвраты из POS, обменивается данными с CRM", $sprite="csharp")
+    Container(notification, "Сервис уведомлений", "C# или Go", "Отбирает клиентов с согласием и отправляет сообщения об акциях", $sprite="csharp")
+    ContainerDb(postgres, "Основная база данных", "PostgreSQL", "Единственный источник истины: клиенты, покупки, бонусы, акции и аудит", $sprite="postgresql")
+    ContainerDb(redis, "Кэш и временные данные", "Redis", "Кэш баланса, сессии и короткие очереди; не хранит единственную копию операций", $sprite="redis")
+}
+
+Rel(client, web, "Использует", "HTTPS")
+Rel(marketing, web, "Использует", "HTTPS")
+Rel(admin, web, "Использует", "HTTPS")
+
+Rel(web, main, "Личный кабинет и рабочие разделы", "HTTPS/XML")
+Rel(integration, main, "Передаёт покупки и возвраты", "HTTP/XML")
+Rel(notification, main, "Получает акции и сегменты", "HTTP/XML")
+Rel(main, postgres, "Хранит пользователей, бонусы, акции и отчёты", "SQL")
+Rel(main, redis, "Кэширует баланс и сессии", "Redis protocol")
+
+Rel(pos, integration, "Передаёт покупки, возвраты и статус оплаты", "HTTP/XML")
+Rel(crm, integration, "Обменивается данными", "HTTP/XML")
+Rel(notification, message_provider, "Отправляет сообщения", "HTTPS/XML")
+
+@enduml
