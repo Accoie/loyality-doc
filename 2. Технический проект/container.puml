@@ -1,47 +1,77 @@
 @startuml
 title Контейнерная диаграмма системы управления лояльностью
 
-' C4 Container diagram and simple technology icons
-!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include <C4/C4_Container>
+!include <tupadr3/devicons/react>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons2/postgresql>
+!include <logos/rabbitmq>
 
-!define DEVICONS1 https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons
-!define DEVICONS2 https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/master/devicons2
-!include DEVICONS1/redis.puml
-!include DEVICONS2/csharp.puml
-!include DEVICONS2/postgresql.puml
+LAYOUT_TOP_DOWN()
 
-LAYOUT_LEFT_RIGHT()
-SHOW_LEGEND()
+Person(client, "Клиент", "Баланс, история и акции")
+Person(marketing, "Менеджер по маркетингу", "Акции, сегменты и отчёты")
+Person(admin, "Администратор", "Роли, блокировки и настройки")
 
-Person(client, "Клиент", "Работает с балансом, историей и акциями")
-Person(marketing, "Менеджер по маркетингу", "Управляет акциями, сегментами и отчётами")
-Person(admin, "Администратор", "Управляет ролями, блокировками и настройками")
-
-System_Ext(pos, "POS", "Покупки, возвраты и статус оплаты")
-System_Ext(crm, "CRM", "Данные о клиентах и активности")
-System_Ext(message_provider, "Провайдер сообщений", "Доставка уведомлений")
+System_Ext(pos1, "POS магазина №1", "Покупки, возвраты и статус оплаты")
+System_Ext(pos2, "POS магазина №2", "Покупки, возвраты и статус оплаты")
+System_Ext(pos3, "POS магазина №3", "Покупки, возвраты и статус оплаты")
+System_Ext(crm, "CRM", "Клиенты и активность")
+System_Ext(message_provider, "Провайдер сообщений", "Доставка писем и уведомлений")
 
 System_Boundary(loyalty, "Система управления лояльностью") {
-    Container(web, "Веб-приложение", "React + TypeScript", "Адаптивный личный кабинет и интерфейсы сотрудников")
-    Container(main, "Основной сервис", "C# или Go", "Пользователи, роли, бонусы, акции и отчёты", $sprite="csharp")
-    Container(integration, "Интеграционный сервис", "C# или Go", "Принимает покупки и возвраты из POS, обменивается данными с CRM", $sprite="csharp")
-    Container(notification, "Сервис уведомлений", "C# или Go", "Отбирает клиентов с согласием и отправляет сообщения об акциях", $sprite="csharp")
-    ContainerDb(postgres, "Основная база данных", "PostgreSQL", "Единственный источник истины: клиенты, покупки, бонусы, акции и аудит", $sprite="postgresql")
-    ContainerDb(redis, "Кэш и временные данные", "Redis", "Кэш баланса, сессии и короткие очереди; не хранит единственную копию операций", $sprite="redis")
+    Container(web, "Веб-приложение", "React + TypeScript", "Личный кабинет и интерфейсы сотрудников", $sprite="react")
+    Container(registration, "Сервис регистрации и доступа", "C# или Go", "Регистрация, вход, профили, роли и согласия")
+    Container(bonus, "Сервис бонусов", "C# или Go", "Баланс, резервы, начисление, списание и возвраты")
+    Container(promotion, "Сервис акций", "C# или Go", "Создание, публикация и остановка акций")
+    Container(analytics, "Сервис аналитики", "C# или Go", "Отчёты и сегментация клиентов")
+    Container(integration, "Интеграционный сервис", "C# или Go", "Приём операций от нескольких POS и обмен с CRM")
+    Container(notification, "Сервис уведомлений", "C# или Go", "Письма и реклама с проверкой согласия")
+    ContainerQueue(bus, "Шина событий", "RabbitMQ", "XML-сообщения между сервисами; очереди подписчиков", $sprite="rabbitmq")
+    ContainerDb(postgres, "Общая база данных", "PostgreSQL", "Данные сервисов; отдельные схемы по доменам", $sprite="postgresql")
+    ContainerDb(redis, "Кэш и сессии", "Redis", "Временные данные", $sprite="redis")
 }
 
-Rel(client, web, "Использует", "HTTPS")
-Rel(marketing, web, "Использует", "HTTPS")
-Rel(admin, web, "Использует", "HTTPS")
+Rel_D(client, web, "Использует", "HTTPS")
+Rel_D(marketing, web, "Использует", "HTTPS")
+Rel_D(admin, web, "Использует", "HTTPS")
+Rel_D(web, registration, "Регистрация, вход и доступ", "HTTPS/XML")
+Rel_D(web, bonus, "Баланс, история, курс баллов", "HTTPS/XML")
+Rel_D(web, promotion, "Акции и запуск рассылки", "HTTPS/XML")
+Rel_D(web, analytics, "Отчёты и сегменты", "HTTPS/XML")
 
-Rel(web, main, "Личный кабинет и рабочие разделы", "HTTPS/XML")
-Rel(integration, main, "Передаёт покупки и возвраты", "HTTP/XML")
-Rel(notification, main, "Получает акции и сегменты", "HTTP/XML")
-Rel(main, postgres, "Хранит пользователей, бонусы, акции и отчёты", "SQL")
-Rel(main, redis, "Кэширует баланс и сессии", "Redis protocol")
+BiRel_D(registration, bus, "Профили, роли, согласия; запросы проверки", "XML")
+BiRel_D(bonus, bus, "Команды по баллам; результаты операций", "XML")
+BiRel_D(promotion, bus, "Акции; задания на рассылку", "XML")
+BiRel_D(analytics, bus, "События покупок; сегменты", "XML")
+BiRel_D(integration, bus, "Операции POS/CRM; результаты", "XML")
+BiRel_D(notification, bus, "Задания, проверка согласия; результаты", "XML")
 
-Rel(pos, integration, "Передаёт покупки, возвраты и статус оплаты", "HTTP/XML")
-Rel(crm, integration, "Обменивается данными", "HTTP/XML")
-Rel(notification, message_provider, "Отправляет сообщения", "HTTPS/XML")
+Rel_D(registration, postgres, "Профили, роли и согласия", "SQL")
+Rel_D(bonus, postgres, "Покупки и бонусные операции", "SQL")
+Rel_D(promotion, postgres, "Акции", "SQL")
+Rel_D(analytics, postgres, "Отчёты и сегменты", "SQL")
+Rel_D(integration, postgres, "Журнал обмена", "SQL")
+Rel_D(notification, postgres, "История отправок", "SQL")
+Rel_D(registration, redis, "Сессии", "RESP")
+Rel_D(bonus, redis, "Кэш баланса", "RESP")
+
+Rel_U(pos1, integration, "Покупки, возвраты, статус оплаты", "HTTPS/XML")
+Rel_U(pos2, integration, "Покупки, возвраты, статус оплаты", "HTTPS/XML")
+Rel_U(pos3, integration, "Покупки, возвраты, статус оплаты", "HTTPS/XML")
+BiRel_U(crm, integration, "Клиенты и активность", "HTTPS/XML")
+Rel_D(notification, message_provider, "Письма и уведомления", "HTTPS/XML")
+
+Lay_D(bus, postgres)
+Lay_D(bus, redis)
+Lay_D(postgres, pos1)
+Lay_D(postgres, pos2)
+Lay_D(postgres, pos3)
+Lay_D(postgres, crm)
+Lay_D(postgres, message_provider)
+Lay_R(pos1, pos2)
+Lay_R(pos2, pos3)
+Lay_R(pos3, crm)
+Lay_R(crm, message_provider)
 
 @enduml
