@@ -1,0 +1,130 @@
+@startuml
+
+!include <C4/C4_Component>
+!include <tupadr3/devicons/react>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons2/postgresql>
+!include <logos/rabbitmq>
+
+LAYOUT_TOP_DOWN()
+scale max 4000 width
+AddRelTag("delivery", $textColor="#174B8A", $lineColor="#174B8A", $legendText="Доставка из RabbitMQ")
+
+Container(web, "Веб-приложение", "React + TypeScript", "Личный кабинет и интерфейсы сотрудников", $sprite="react")
+ContainerQueue(bus, "Шина событий", "RabbitMQ", "XML-сообщения и очереди подписчиков", $sprite="rabbitmq")
+
+System_Ext(pos1, "POS магазина №1", "Покупки, возвраты и статус оплаты")
+System_Ext(pos2, "POS магазина №2", "Покупки, возвраты и статус оплаты")
+System_Ext(pos3, "POS магазина №3", "Покупки, возвраты и статус оплаты")
+System_Ext(crm, "CRM", "Клиенты и активность")
+System_Ext(provider, "Провайдер сообщений", "Доставка писем и уведомлений")
+
+Container_Boundary(registration, "Сервис регистрации и доступа") {
+    Component(reg_api, "API регистрации и доступа", "HTTPS/XML", "Регистрация, вход и настройки доступа")
+    Component(reg_bus, "Обмен сообщениями", "RabbitMQ", "Передает запрос на подтверждение почты")
+    Component(reg_accounts, "Учетные записи", "Бизнес-логика", "Уникальный логин и почта, подтверждение почты, хеширование пароля")
+    Component(reg_access, "Роли и сессии", "Бизнес-логика", "Вход, роли и блокировки")
+    Component(reg_store, "Данные регистрации", "Репозиторий", "Профили, хеши и роли")
+}
+
+Container_Boundary(bonus, "Сервис бонусов") {
+    Component(bonus_api, "API бонусов", "HTTPS/XML", "Принимает запросы клиента на баланс и историю, а от администратора - на смену курса")
+    Component(bonus_bus, "Обмен сообщениями", "RabbitMQ", "Получает команды касс и отправляет результаты")
+    Component(bonus_account, "Бонусный счет", "", "Показывает баланс и историю. Резервирует баллы до оплаты, начисляет и списывает после нее. Обрабатывает отмены и возвраты")
+    Component(bonus_rates, "Курс баллов", "", "Меняет курс и записывает изменения в журнал. Завершенные покупки сохраняют свой курс")
+    Component(bonus_store, "Данные бонусов", "", "Сохраняет баланс и операцию вместе. Проверяет, была ли операция уже проведена")
+}
+
+Container_Boundary(promotion, "Сервис акций") {
+    Component(promo_api, "API акций", "HTTPS/XML", "Просмотр и управление акциями")
+    Component(promo_bus, "Обмен сообщениями", "RabbitMQ", "События акций")
+    Component(promo_rules, "Управление акциями", "Бизнес-логика", "Проверяет товары, скидку и даты; публикует и останавливает акции")
+    Component(promo_store, "Данные акций", "Репозиторий", "Условия, периоды действия и аудит публикаций")
+}
+
+Container_Boundary(analytics, "Сервис аналитики") {
+    Component(analytics_api, "API аналитики", "HTTPS/XML", "Отчеты и сегменты для менеджера")
+    Component(analytics_bus, "Обмен сообщениями", "RabbitMQ", "Принимает события покупок и возвратов;")
+    Component(analytics_calc, "Отчеты и сегментация", "Бизнес-логика", "Активные клиенты, покупки и акции; сегменты по числу, сумме и давности покупок")
+    Component(analytics_store, "Данные аналитики", "Репозиторий", "Показатели и сегменты; одна запись на покупку")
+}
+
+Container_Boundary(integration, "Интеграционный сервис") {
+    Component(pos_api, "Адаптер POS", "HTTPS/XML", "Принимает покупки, возвраты и статус оплаты от касс")
+    Component(crm_api, "Адаптер CRM", "HTTPS/XML", "Принимает и отправляет данные о клиентах и активности")
+    Component(exchange, "Обмен операциями", "RabbitMQ", "Проверяет XML и идентификаторы; направляет команды и возвращает результаты")
+    Component(exchange_store, "Журнал обмена", "Репозиторий", "Сообщения, статусы обработки и повторы")
+}
+
+Container_Boundary(notification, "Сервис уведомлений") {
+    Component(notify_bus, "Обмен сообщениями", "RabbitMQ", "Получает уведомления из RabbitMQ")
+    Component(notify_send, "Подготовка отправки", "Бизнес-логика", "Готовит текст уведомления к отправке")
+    Component(notify_provider, "Адаптер провайдера", "HTTPS/XML", "Передает сообщения для доставки")
+    Component(notify_store, "История отправок", "Репозиторий", "Хранит сведения об отправленных уведомлениях")
+}
+
+ContainerDb(postgres, "Общая база данных", "PostgreSQL", "Отдельная схема каждого сервиса", $sprite="postgresql")
+ContainerDb(redis, "Кэш и сессии", "Redis", "Кэш баланса и временные сессии", $sprite="redis")
+
+Rel_D(web, reg_api, "Регистрация, вход и доступ", "HTTPS/XML")
+Rel_D(web, bonus_api, "Баланс, история и курс", "HTTPS/XML")
+Rel_D(web, promo_api, "Акции", "HTTPS/XML")
+Rel_D(web, analytics_api, "Отчеты и сегменты", "HTTPS/XML")
+
+Rel_D(bus, bonus_bus, "Операции касс", "XML", $tags="delivery")
+Rel_D(bus, analytics_bus, "Покупки, возвраты и запросы сегментов", "XML", $tags="delivery")
+Rel_D(bus, exchange, "Ответы для касс и данные для CRM", "XML", $tags="delivery")
+Rel_D(bus, notify_bus, "Уведомления для отправки", "XML", $tags="delivery")
+
+Rel_U(reg_bus, bus, "Запрос на подтверждение почты", "XML")
+Rel_U(bonus_bus, bus, "Итоги операций", "XML")
+Rel_U(promo_bus, bus, "События акций", "XML")
+Rel_U(analytics_bus, bus, "Обмен данными", "XML")
+Rel_U(exchange, bus, "Покупки, возвраты, оплата и данные CRM", "XML")
+
+Rel_D(reg_api, reg_accounts, "Создает и обновляет аккаунт")
+Rel_D(reg_api, reg_access, "Проверяет вход и меняет права")
+Rel(reg_accounts, reg_bus, "Запрашивает подтверждение почты")
+Rel_D(reg_accounts, reg_store, "Сохраняет профиль и статус почты")
+Rel_D(reg_access, reg_store, "Читает и меняет права")
+Rel_D(reg_store, postgres, "Хранит аккаунты и права", "SQL")
+Rel_D(reg_access, redis, "Хранит сессии", "RESP")
+
+Rel_D(bonus_api, bonus_account, "Запрашивает баланс и историю")
+Rel_D(bonus_api, bonus_rates, "Меняет курс")
+Rel_D(bonus_bus, bonus_account, "Передает операцию")
+Rel_D(bonus_bus, bonus_store, "Читает результат операции")
+Rel_D(bonus_account, bonus_rates, "Читает курс")
+Rel_D(bonus_account, bonus_store, "Читает счет и сохраняет операции")
+Rel_D(bonus_account, redis, "Читает и сбрасывает кэш баланса", "RESP")
+Rel_D(bonus_rates, bonus_store, "Сохраняет курс и аудит")
+Rel_D(bonus_store, postgres, "Хранит баланс и операции", "SQL")
+
+Rel_D(promo_api, promo_rules, "Управляет акциями")
+Rel(promo_rules, promo_bus, "Передает событие акции")
+Rel_D(promo_rules, promo_store, "Сохраняет акцию и аудит")
+Rel_D(promo_store, postgres, "Хранит акции", "SQL")
+
+Rel_D(analytics_api, analytics_calc, "Формирует отчет или сегмент")
+Rel_D(analytics_bus, analytics_calc, "Покупки, возвраты и запросы сегментов")
+Rel_D(analytics_calc, analytics_store, "Читает и обновляет показатели")
+Rel_D(analytics_store, postgres, "Хранит показатели и сегменты", "SQL")
+
+Rel_D(pos1, pos_api, "Покупки, возвраты и статус оплаты", "HTTPS/XML")
+Rel_D(pos2, pos_api, "Покупки, возвраты и статус оплаты", "HTTPS/XML")
+Rel_D(pos3, pos_api, "Покупки, возвраты и статус оплаты", "HTTPS/XML")
+BiRel_D(crm, crm_api, "Профили и активность", "HTTPS/XML")
+Rel_D(pos_api, exchange, "Передает операции")
+Rel_U(exchange, pos_api, "Возвращает результат")
+Rel_D(crm_api, exchange, "Передает данные из CRM")
+Rel_U(exchange, crm_api, "Передает данные для CRM")
+Rel_D(exchange, exchange_store, "Записывает результат обмена")
+Rel_D(exchange_store, postgres, "Хранит журнал обмена", "SQL")
+
+Rel_D(notify_bus, notify_send, "Передает уведомление")
+Rel_D(notify_send, notify_provider, "Передает сообщение")
+Rel_D(notify_send, notify_store, "Записывает отправку")
+Rel_D(notify_provider, provider, "Отправляет письма и уведомления", "HTTPS/XML")
+Rel_D(notify_store, postgres, "Хранит историю отправок", "SQL")
+
+@enduml
