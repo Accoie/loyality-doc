@@ -1,5 +1,4 @@
 @startuml
-
 !include <C4/C4_Component>
 !include <tupadr3/devicons/react>
 !include <tupadr3/devicons/redis>
@@ -72,7 +71,7 @@ Rel_D(web, promo_api, "Акции", "HTTPS/XML")
 Rel_D(web, analytics_api, "Отчеты и сегменты", "HTTPS/XML")
 
 Rel_D(bus, bonus_bus, "Операции касс", "XML", $tags="delivery")
-Rel_D(bus, analytics_bus, "Покупки, возвраты и запросы сегментов", "XML", $tags="delivery")
+Rel_D(bus, analytics_bus, "Покупки, возвраты, активность в CRM", "XML", $tags="delivery")
 Rel_D(bus, exchange, "Ответы для касс и данные для CRM", "XML", $tags="delivery")
 Rel_D(bus, notify_bus, "Уведомления для отправки", "XML", $tags="delivery")
 
@@ -126,5 +125,4 @@ Rel_D(notify_send, notify_provider, "Передает сообщение")
 Rel_D(notify_send, notify_store, "Записывает отправку")
 Rel_D(notify_provider, provider, "Отправляет письма и уведомления", "HTTPS/XML")
 Rel_D(notify_store, postgres, "Хранит историю отправок", "SQL")
-
 @enduml
