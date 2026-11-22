@@ -1,0 +1,77 @@
+@startuml
+!include <C4/C4_Deployment>
+!include <tupadr3/devicons/react>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons2/postgresql>
+!include <logos/rabbitmq>
+
+title Система лояльности — диаграмма развёртывания
+LAYOUT_TOP_DOWN()
+
+Person(user, "Пользователь", "Клиент, маркетолог или администратор")
+System_Ext(pos, "Кассы трёх магазинов", "Покупки и возвраты")
+System_Ext(crm, "CRM", "Данные клиентов")
+System_Ext(provider, "Провайдер сообщений", "Доставка писем и уведомлений")
+
+Deployment_Node(cluster, "Производственный кластер", "Kubernetes") {
+    Deployment_Node(workers, "Рабочий узел × 2", "На каждом узле по одному экземпляру каждого приложения") {
+        Container(web, "Веб-интерфейс", "Nginx + React", "Личный кабинет и интерфейсы сотрудников", $sprite="react")
+        Container(access, "Сервис регистрации и доступа", "Сервис", "Профили, роли и сессии")
+        Container(bonus, "Сервис бонусов", "Сервис", "Баланс, начисление и списание")
+        Container(promo, "Сервис акций", "Сервис", "Управление акциями")
+        Container(stats, "Сервис аналитики", "Сервис", "Отчёты и сегменты")
+        Container(integration, "Интеграционный сервис", "Сервис", "Обмен с кассами и CRM")
+        Container(notify, "Сервис уведомлений", "Сервис", "Отправка сообщений")
+    }
+}
+
+Deployment_Node(data, "Управляемые сервисы данных", "") {
+    ContainerDb(db, "Основная база данных", "PostgreSQL", "Отдельная схема для каждого сервиса", $sprite="postgresql")
+    ContainerDb(standby, "Резервный экземпляр БД", "PostgreSQL", "Принимает работу при отказе основной БД", $sprite="postgresql")
+    ContainerDb(cache, "Кэш и сессии", "Redis", "Кэш баланса и пользовательские сессии", $sprite="redis")
+    ContainerQueue(bus, "Шина событий", "RabbitMQ", "Обмен сообщениями между сервисами", $sprite="rabbitmq")
+}
+
+Deployment_Node(storage1, "Резервное хранилище №1", "Отдельное хранилище") {
+    ContainerDb(copy1, "Копия №1", "Файл дампа", "Ежедневная полная копия PostgreSQL")
+}
+
+Deployment_Node(storage2, "Резервное хранилище №2", "Отдельное хранилище") {
+    ContainerDb(copy2, "Копия №2", "Файл дампа", "Второй экземпляр того же ежедневного дампа")
+}
+
+Rel(user, web, "Открывает кабинет", "HTTPS")
+Rel(web, access, "Вход и профиль")
+Rel(web, bonus, "Баланс и история")
+Rel(web, promo, "Акции")
+Rel(web, stats, "Отчёты")
+
+Rel(pos, integration, "Передают покупки и возвраты", "HTTPS/XML")
+BiRel(crm, integration, "Обмен данными клиентов", "HTTPS/XML")
+Rel(notify, provider, "Передаёт сообщения для доставки", "HTTPS/XML")
+
+Rel(access, cache, "Хранит сессии")
+Rel(bonus, cache, "Читает и обновляет кэш баланса")
+Rel(bonus, db, "Фиксирует бонусные операции", "SQL")
+BiRel(integration, bus, "Операции касс и результаты", "AMQP/XML")
+BiRel(bonus, bus, "Команды и результаты операций", "AMQP/XML")
+BiRel(notify, bus, "Задания и результаты рассылки", "AMQP/XML")
+
+Rel(db, standby, "Репликация изменений", "WAL")
+Rel(db, copy1, "Сохранение ежедневного дампа")
+Rel(db, copy2, "Сохранение второго экземпляра дампа")
+
+legend left
+  Размещение: 1 кластер Kubernetes, 2 рабочих узла.
+  Рамка «Рабочий узел × 2» показывает состав каждого из двух узлов.
+
+  Релиз: Rolling Update. Kubernetes запускает новую реплику приложения,
+  проверяет её готовность и затем останавливает одну старую реплику.
+
+  AVA01 — цель доступности: 99,9% за месяц. При отказе одного рабочего узла
+  второй должен выдерживать рабочую нагрузку самостоятельно.
+  MON01–02 — проверка доступности, времени ответа и ошибок каждую минуту.
+  Оповещение ответственного — в течение 2 минут после обнаружения сбоя.
+  PER03 — расчёт скидки или резервирование баллов до 500 мс без ожидания оплаты.
+endlegend
+@enduml
