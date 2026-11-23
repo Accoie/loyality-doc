@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Promotion" targetNamespace="urn:loyalty:promotion-publication" exporter="bpmn-js (https://demo.bpmn.io)" exporterVersion="18.33.1">
+  <bpmn:message id="Message_PromotionData" name="Данные акции" />
+  <bpmn:message id="Message_ValidationError" name="Причина отказа" />
+  <bpmn:message id="Message_PromotionCreated" name="Подтверждение создания" />
+  <bpmn:message id="Message_PublishCommand" name="Команда публикации" />
+  <bpmn:message id="Message_PromotionPublished" name="Подтверждение публикации" />
+  <bpmn:collaboration id="Collaboration_Promotion" name="Создание и публикация акции">
+    <bpmn:participant id="Participant_Loyalty" name="Создание и публикация акции" processRef="Process_Promotion" />
+    <bpmn:participant id="Participant_0q5t6qs" name="Менеджер" processRef="Process_0h1001l" />
+    <bpmn:messageFlow id="MessageFlow_Publish" name="Команда публикации" sourceRef="Task_ClickPublish" targetRef="Catch_PublishCommand" />
+    <bpmn:messageFlow id="MessageFlow_Submit" name="Данные акции" sourceRef="Task_SubmitForm" targetRef="Start_PromotionData" />
+    <bpmn:messageFlow id="MessageFlow_Published" name="Подтверждение публикации" sourceRef="End_Published" targetRef="Catch_PublicationConfirmed" />
+    <bpmn:messageFlow id="MessageFlow_Created" name="Подтверждение создания" sourceRef="Throw_PromotionCreated" targetRef="Catch_CreationConfirmed" />
+    <bpmn:messageFlow id="MessageFlow_Reject" name="Причина отказа" sourceRef="End_ValidationError" targetRef="Catch_ValidationRejected" />
+    <bpmn:textAnnotation id="Annotation_Validation">
+      <bpmn:text>Скидка больше 0% и не больше 100%.
+Начало периода раньше окончания.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Validation" sourceRef="Task_Validate" targetRef="Annotation_Validation" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Promotion" name="Создание и публикация акции" isExecutable="false">
+    <bpmn:documentation>Система лояльности начинает процесс по запросу авторизованного менеджера по маркетингу. После отказа менеджер может исправить данные и отправить новый запрос. Опубликованная акция действует от начала до окончания заданного периода.</bpmn:documentation>
+    <bpmn:startEvent id="Start_PromotionData" name="Получить данные акции">
+      <bpmn:documentation>Запрос содержит название акции, товары, скидку и период действия.</bpmn:documentation>
+      <bpmn:outgoing>Flow_ToValidation</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_PromotionData" messageRef="Message_PromotionData" />
+    </bpmn:startEvent>
+    <bpmn:businessRuleTask id="Task_Validate" name="Проверить скидку и период">
+      <bpmn:incoming>Flow_ToValidation</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToValidationResult</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:exclusiveGateway id="Gateway_Valid" name="Скидка и период корректны?" gatewayDirection="Diverging" default="Flow_Invalid">
+      <bpmn:incoming>Flow_ToValidationResult</bpmn:incoming>
+      <bpmn:outgoing>Flow_Valid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Invalid</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End_ValidationError" name="Создание отклонено">
+      <bpmn:incoming>Flow_Invalid</bpmn:incoming>
+      <bpmn:messageEventDefinition id="EventDef_ValidationError" messageRef="Message_ValidationError" />
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Task_Save" name="Сохранить акцию">
+      <bpmn:incoming>Flow_Valid</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToCreationNotice</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:intermediateThrowEvent id="Throw_PromotionCreated" name="Подтвердить создание">
+      <bpmn:incoming>Flow_ToCreationNotice</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToPublishCommand</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_PromotionCreated" messageRef="Message_PromotionCreated" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="Catch_PublishCommand" name="Получить команду публикации">
+      <bpmn:documentation>Менеджер запрашивает публикацию сохранённой акции.</bpmn:documentation>
+      <bpmn:incoming>Flow_ToPublishCommand</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToPublish</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_PublishCommand" messageRef="Message_PublishCommand" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End_Published" name="Акция опубликована">
+      <bpmn:incoming>Flow_ToAudit</bpmn:incoming>
+      <bpmn:messageEventDefinition id="EventDef_Published" messageRef="Message_PromotionPublished" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ToValidation" sourceRef="Start_PromotionData" targetRef="Task_Validate" />
+    <bpmn:sequenceFlow id="Flow_ToValidationResult" sourceRef="Task_Validate" targetRef="Gateway_Valid" />
+    <bpmn:sequenceFlow id="Flow_Valid" name="Да" sourceRef="Gateway_Valid" targetRef="Task_Save">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">0% &lt; скидка ≤ 100% и начало раньше окончания</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Invalid" name="Нет" sourceRef="Gateway_Valid" targetRef="End_ValidationError" />
+    <bpmn:sequenceFlow id="Flow_ToCreationNotice" sourceRef="Task_Save" targetRef="Throw_PromotionCreated" />
+    <bpmn:sequenceFlow id="Flow_ToPublishCommand" sourceRef="Throw_PromotionCreated" targetRef="Catch_PublishCommand" />
+    <bpmn:sequenceFlow id="Flow_ToPublish" sourceRef="Catch_PublishCommand" targetRef="Task_Publish" />
+    <bpmn:sequenceFlow id="Flow_ToAudit" sourceRef="Task_Publish" targetRef="End_Published" />
+    <bpmn:serviceTask id="Task_Publish" name="Опубликовать акцию на заданный период">
+      <bpmn:incoming>Flow_ToPublish</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToAudit</bpmn:outgoing>
+    </bpmn:serviceTask>
+  </bpmn:process>
+  <bpmn:process id="Process_0h1001l" name="Работа менеджера по маркетингу с акцией" isExecutable="false">
+    <bpmn:startEvent id="Start_Marketing">
+      <bpmn:outgoing>ManagerFlow_Start</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_FillForm" name="Заполнить форму акции">
+      <bpmn:documentation>Менеджер указывает название акции, товары, скидку и период действия.</bpmn:documentation>
+      <bpmn:incoming>ManagerFlow_Start</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Filled</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_MergeEdits" gatewayDirection="Converging">
+      <bpmn:incoming>ManagerFlow_Filled</bpmn:incoming>
+      <bpmn:incoming>ManagerFlow_Retry</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Decide</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="Gateway_Submit" name="Отправить данные акции?" gatewayDirection="Diverging" default="ManagerFlow_Cancel">
+      <bpmn:incoming>ManagerFlow_Decide</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Cancel</bpmn:outgoing>
+      <bpmn:outgoing>ManagerFlow_Submit</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End_MarketingCancelled" name="Менеджер отказался от создания акции">
+      <bpmn:incoming>ManagerFlow_Cancel</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Task_SubmitForm" name="Отправить данные акции">
+      <bpmn:incoming>ManagerFlow_Submit</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Wait</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:eventBasedGateway id="Gateway_ValidationReply" name="Дождаться результата проверки" gatewayDirection="Diverging">
+      <bpmn:incoming>ManagerFlow_Wait</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Rejected</bpmn:outgoing>
+      <bpmn:outgoing>ManagerFlow_Accepted</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Catch_ValidationRejected" name="Получить причину отказа">
+      <bpmn:incoming>ManagerFlow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Correct</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_Catch_ValidationRejected" messageRef="Message_ValidationError" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:userTask id="Task_CorrectForm" name="Исправить данные акции">
+      <bpmn:incoming>ManagerFlow_Correct</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Retry</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:intermediateCatchEvent id="Catch_CreationConfirmed" name="Получить подтверждение создания">
+      <bpmn:incoming>ManagerFlow_Accepted</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Publish</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_Catch_CreationConfirmed" messageRef="Message_PromotionCreated" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:userTask id="Task_ClickPublish" name="Нажать «Опубликовать»">
+      <bpmn:incoming>ManagerFlow_Publish</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_WaitPublication</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:intermediateCatchEvent id="Catch_PublicationConfirmed" name="Получить подтверждение публикации">
+      <bpmn:incoming>ManagerFlow_WaitPublication</bpmn:incoming>
+      <bpmn:outgoing>ManagerFlow_Done</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="EventDef_Catch_PublicationConfirmed" messageRef="Message_PromotionPublished" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End_MarketingPublished" name="Публикация подтверждена">
+      <bpmn:incoming>ManagerFlow_Done</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="ManagerFlow_Start" sourceRef="Start_Marketing" targetRef="Task_FillForm" />
+    <bpmn:sequenceFlow id="ManagerFlow_Filled" sourceRef="Task_FillForm" targetRef="Gateway_MergeEdits" />
+    <bpmn:sequenceFlow id="ManagerFlow_Decide" sourceRef="Gateway_MergeEdits" targetRef="Gateway_Submit" />
+    <bpmn:sequenceFlow id="ManagerFlow_Cancel" name="Нет" sourceRef="Gateway_Submit" targetRef="End_MarketingCancelled" />
+    <bpmn:sequenceFlow id="ManagerFlow_Submit" name="Да" sourceRef="Gateway_Submit" targetRef="Task_SubmitForm">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">Менеджер решил отправить данные акции</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="ManagerFlow_Wait" sourceRef="Task_SubmitForm" targetRef="Gateway_ValidationReply" />
+    <bpmn:sequenceFlow id="ManagerFlow_Rejected" sourceRef="Gateway_ValidationReply" targetRef="Catch_ValidationRejected" />
+    <bpmn:sequenceFlow id="ManagerFlow_Correct" sourceRef="Catch_ValidationRejected" targetRef="Task_CorrectForm" />
+    <bpmn:sequenceFlow id="ManagerFlow_Retry" sourceRef="Task_CorrectForm" targetRef="Gateway_MergeEdits" />
+    <bpmn:sequenceFlow id="ManagerFlow_Accepted" sourceRef="Gateway_ValidationReply" targetRef="Catch_CreationConfirmed" />
+    <bpmn:sequenceFlow id="ManagerFlow_Publish" sourceRef="Catch_CreationConfirmed" targetRef="Task_ClickPublish" />
+    <bpmn:sequenceFlow id="ManagerFlow_WaitPublication" sourceRef="Task_ClickPublish" targetRef="Catch_PublicationConfirmed" />
+    <bpmn:sequenceFlow id="ManagerFlow_Done" sourceRef="Catch_PublicationConfirmed" targetRef="End_MarketingPublished" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Promotion" name="Создание и публикация акции">
+    <bpmndi:BPMNPlane id="Plane_Promotion" bpmnElement="Collaboration_Promotion">
+      <bpmndi:BPMNShape id="Shape_Loyalty" bpmnElement="Participant_Loyalty" isHorizontal="true">
+        <dc:Bounds x="160" y="550" width="1460" height="380" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Start" bpmnElement="Start_PromotionData">
+        <dc:Bounds x="222" y="748" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="195" y="794" width="91" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Validate" bpmnElement="Task_Validate">
+        <dc:Bounds x="305" y="726" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Valid" bpmnElement="Gateway_Valid" isMarkerVisible="true">
+        <dc:Bounds x="520" y="741" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="485" y="799" width="120" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Rejected" bpmnElement="End_ValidationError">
+        <dc:Bounds x="632" y="627" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="594" y="671" width="112" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Save" bpmnElement="Task_Save">
+        <dc:Bounds x="625" y="726" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Created" bpmnElement="Throw_PromotionCreated">
+        <dc:Bounds x="832" y="748" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="792" y="794" width="116" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_PublishCommand" bpmnElement="Catch_PublishCommand">
+        <dc:Bounds x="992" y="748" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="947" y="794" width="126" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Published" bpmnElement="End_Published">
+        <dc:Bounds x="1447" y="748" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1405" y="794" width="120" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Publish" bpmnElement="Task_Publish">
+        <dc:Bounds x="1157" y="726" width="145" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_ToValidation" bpmnElement="Flow_ToValidation">
+        <di:waypoint x="258" y="766" />
+        <di:waypoint x="305" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ToValidationResult" bpmnElement="Flow_ToValidationResult">
+        <di:waypoint x="465" y="766" />
+        <di:waypoint x="520" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Valid" bpmnElement="Flow_Valid">
+        <di:waypoint x="570" y="766" />
+        <di:waypoint x="625" y="766" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="586" y="745" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Invalid" bpmnElement="Flow_Invalid">
+        <di:waypoint x="545" y="741" />
+        <di:waypoint x="545" y="645" />
+        <di:waypoint x="632" y="645" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="569" y="623" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ToCreationNotice" bpmnElement="Flow_ToCreationNotice">
+        <di:waypoint x="755" y="766" />
+        <di:waypoint x="832" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ToPublishCommand" bpmnElement="Flow_ToPublishCommand">
+        <di:waypoint x="868" y="766" />
+        <di:waypoint x="992" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ToPublish" bpmnElement="Flow_ToPublish">
+        <di:waypoint x="1028" y="766" />
+        <di:waypoint x="1157" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ToAudit" bpmnElement="Flow_ToAudit">
+        <di:waypoint x="1302" y="766" />
+        <di:waypoint x="1447" y="766" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Participant_0q5t6qs_di" bpmnElement="Participant_0q5t6qs" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1460" height="380" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Start_Marketing" bpmnElement="Start_Marketing">
+        <dc:Bounds x="212" y="230" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_FillForm" bpmnElement="Task_FillForm">
+        <dc:Bounds x="265" y="208" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_MergeEdits" bpmnElement="Gateway_MergeEdits" isMarkerVisible="true">
+        <dc:Bounds x="440" y="223" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Submit" bpmnElement="Gateway_Submit" isMarkerVisible="true">
+        <dc:Bounds x="525" y="223" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="495" y="282" width="110" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_MarketingCancelled" bpmnElement="End_MarketingCancelled">
+        <dc:Bounds x="632" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="585" y="166" width="130" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_SubmitForm" bpmnElement="Task_SubmitForm">
+        <dc:Bounds x="615" y="208" width="130" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_ValidationReply" bpmnElement="Gateway_ValidationReply">
+        <dc:Bounds x="770" y="223" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="738" y="175" width="114" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Catch_ValidationRejected" bpmnElement="Catch_ValidationRejected">
+        <dc:Bounds x="777" y="352" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="819" y="355" width="120" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_CorrectForm" bpmnElement="Task_CorrectForm">
+        <dc:Bounds x="515" y="330" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Catch_CreationConfirmed" bpmnElement="Catch_CreationConfirmed">
+        <dc:Bounds x="927" y="230" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="875" y="185" width="140" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_ClickPublish" bpmnElement="Task_ClickPublish">
+        <dc:Bounds x="1015" y="208" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Catch_PublicationConfirmed" bpmnElement="Catch_PublicationConfirmed">
+        <dc:Bounds x="1447" y="230" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1395" y="185" width="140" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_End_MarketingPublished" bpmnElement="End_MarketingPublished">
+        <dc:Bounds x="1522" y="230" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1490" y="277" width="100" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Start" bpmnElement="ManagerFlow_Start">
+        <di:waypoint x="248" y="248" />
+        <di:waypoint x="265" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Filled" bpmnElement="ManagerFlow_Filled">
+        <di:waypoint x="415" y="248" />
+        <di:waypoint x="440" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Decide" bpmnElement="ManagerFlow_Decide">
+        <di:waypoint x="490" y="248" />
+        <di:waypoint x="525" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Cancel" bpmnElement="ManagerFlow_Cancel">
+        <di:waypoint x="550" y="223" />
+        <di:waypoint x="550" y="140" />
+        <di:waypoint x="632" y="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="575" y="117" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Submit" bpmnElement="ManagerFlow_Submit">
+        <di:waypoint x="575" y="248" />
+        <di:waypoint x="615" y="248" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="585" y="226" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Wait" bpmnElement="ManagerFlow_Wait">
+        <di:waypoint x="745" y="248" />
+        <di:waypoint x="770" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Rejected" bpmnElement="ManagerFlow_Rejected">
+        <di:waypoint x="795" y="273" />
+        <di:waypoint x="795" y="352" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Correct" bpmnElement="ManagerFlow_Correct">
+        <di:waypoint x="777" y="370" />
+        <di:waypoint x="665" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Retry" bpmnElement="ManagerFlow_Retry">
+        <di:waypoint x="515" y="370" />
+        <di:waypoint x="465" y="370" />
+        <di:waypoint x="465" y="273" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Accepted" bpmnElement="ManagerFlow_Accepted">
+        <di:waypoint x="820" y="248" />
+        <di:waypoint x="927" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Publish" bpmnElement="ManagerFlow_Publish">
+        <di:waypoint x="963" y="248" />
+        <di:waypoint x="1015" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_WaitPublication" bpmnElement="ManagerFlow_WaitPublication">
+        <di:waypoint x="1165" y="248" />
+        <di:waypoint x="1447" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ManagerFlow_Done" bpmnElement="ManagerFlow_Done">
+        <di:waypoint x="1483" y="248" />
+        <di:waypoint x="1522" y="248" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Shape_ValidationAnnotation" bpmnElement="Annotation_Validation">
+        <dc:Bounds x="305" y="856" width="254" height="48" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_MessagePublish" bpmnElement="MessageFlow_Publish">
+        <di:waypoint x="1090" y="288" />
+        <di:waypoint x="1090" y="515" />
+        <di:waypoint x="1010" y="515" />
+        <di:waypoint x="1010" y="748" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1098" y="470" width="132" height="15" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_MessageSubmit" bpmnElement="MessageFlow_Submit">
+        <di:waypoint x="700" y="288" />
+        <di:waypoint x="700" y="490" />
+        <di:waypoint x="240" y="490" />
+        <di:waypoint x="240" y="748" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="299" y="473" width="90" height="15" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_MessagePublished" bpmnElement="MessageFlow_Published">
+        <di:waypoint x="1465" y="748" />
+        <di:waypoint x="1465" y="266" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1476" y="485" width="122" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_MessageCreated" bpmnElement="MessageFlow_Created">
+        <di:waypoint x="850" y="748" />
+        <di:waypoint x="850" y="500" />
+        <di:waypoint x="945" y="500" />
+        <di:waypoint x="945" y="266" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="857" y="504" width="80" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_MessageReject" bpmnElement="MessageFlow_Reject">
+        <di:waypoint x="650" y="627" />
+        <di:waypoint x="650" y="520" />
+        <di:waypoint x="795" y="520" />
+        <di:waypoint x="795" y="388" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="666" y="524" width="100" height="15" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_ValidationAnnotation" bpmnElement="Association_Validation">
+        <di:waypoint x="385" y="806" />
+        <di:waypoint x="385" y="856" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
