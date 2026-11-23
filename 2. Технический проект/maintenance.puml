@@ -1,0 +1,68 @@
+@startuml
+!include <C4/C4_Deployment>
+!include <tupadr3/devicons/react>
+!include <tupadr3/devicons/redis>
+!include <tupadr3/devicons2/postgresql>
+!include <logos/rabbitmq>
+
+title Система лояльности
+LAYOUT_TOP_DOWN()
+
+Person(lead, "Руководитель проекта / аналитик")
+Person(developer, "Fullstack-разработчик")
+Person(tester, "Тестировщик")
+Person(devops, "DevOps-инженер")
+
+Container(build, "Сборка и проверки", "CI/CD", "Анализ кода и автоматические тесты")
+Container(release, "Развёртывание", "CI/CD", "Общий выпуск приложений")
+
+Deployment_Node(cluster, "Производственный кластер", "Kubernetes") {
+    Deployment_Node(workers, "Рабочий узел × 2", "По одной реплике каждого приложения на узел") {
+        Container(web, "Веб-приложение", "Nginx + React/TypeScript", $sprite="react")
+        Container(registration, "Сервис регистрации и доступа", "C# или Go")
+        Container(bonus, "Сервис бонусов", "C# или Go")
+        Container(promotion, "Сервис акций", "C# или Go")
+        Container(analytics, "Сервис аналитики", "C# или Go")
+        Container(integration, "Интеграционный сервис", "C# или Go")
+        Container(notification, "Сервис уведомлений", "C# или Go")
+    }
+}
+
+Deployment_Node(data, "Управляемые сервисы данных", "") {
+    ContainerDb(postgres, "Основная база данных", "PostgreSQL", $sprite="postgresql")
+    ContainerDb(redis, "Кэш и сессии", "Redis", $sprite="redis")
+    ContainerQueue(bus, "Шина событий", "RabbitMQ", $sprite="rabbitmq")
+}
+
+Deployment_Node(storage1, "Резервное хранилище №1", "") {
+    ContainerDb(copy1, "Копия №1", "Зашифрованная копия PostgreSQL")
+}
+
+Deployment_Node(storage2, "Резервное хранилище №2", "") {
+    ContainerDb(copy2, "Копия №2", "Зашифрованная копия PostgreSQL")
+}
+
+Rel_R(lead, developer, "Планирует выпуск")
+Rel_D(developer, build, "Передаёт изменения")
+Rel_U(build, developer, "Блокирует выпуск при ошибке")
+Rel_D(tester, build, "Поддерживает тесты")
+Rel_D(build, release, "Все проверки пройдены")
+Rel_D(devops, release, "Настраивает выпуск")
+Rel_D(release, cluster, "Поочерёдно обновляет реплики", "Rolling Update")
+
+Rel_D(cluster, data, "Данные, кэш и сообщения")
+Rel_D(postgres, copy1, "Ежедневный дамп и изменения БД")
+Rel_D(postgres, copy2, "Ежедневный дамп и изменения БД")
+
+Lay_R(developer, tester)
+Lay_R(web, registration)
+Lay_R(registration, bonus)
+Lay_R(bonus, promotion)
+Lay_D(web, analytics)
+Lay_R(analytics, integration)
+Lay_R(integration, notification)
+Lay_D(analytics, postgres)
+Lay_R(postgres, redis)
+Lay_R(redis, bus)
+Lay_R(copy1, copy2)
+@enduml
